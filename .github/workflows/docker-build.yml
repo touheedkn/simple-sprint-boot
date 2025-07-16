@@ -1,0 +1,36 @@
+name: Docker Build Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - 'feature-*'
+  pull_request:
+    branches:
+      - 'nexops/**'
+  workflow_dispatch:
+
+jobs:
+  docker-build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for multi-arch builds, optional)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract branch name
+        id: extract_branch
+        run: |
+          ref="${GITHUB_REF##*/}"
+          echo "branch_name=$(echo $ref | tr / -)" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build -t myapp:${{ steps.extract_branch.outputs.branch_name }}-${{ github.sha }} .
