@@ -1,0 +1,42 @@
+name: Docker Build Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+      - feature-*
+  pull_request:
+    branches:
+      - nexops/**
+
+jobs:
+  build-docker-image:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract branch name
+        id: extract_branch
+        run: |
+          ref=${GITHUB_REF#refs/heads/}
+          # For PRs, use the head ref
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            ref=${{ github.head_ref }}
+          fi
+          echo "BRANCH=$(echo $ref | tr '/' '-')" >> $GITHUB_ENV
+
+      - name: Build Docker image
+        run: |
+          IMAGE_NAME="my-app"
+          DOCKER_TAG="${{ env.BRANCH }}-${GITHUB_SHA::7}"
+          docker build -t $IMAGE_NAME:$DOCKER_TAG .
+        env:
+          BRANCH: ${{ env.BRANCH }}
