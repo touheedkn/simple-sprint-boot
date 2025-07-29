@@ -1,0 +1,45 @@
+name: sample_pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build application
+        run: echo "Building application..."
+
+      - name: Run build
+        run: make build
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Running tests
+        run: echo "Running tests..."
+
+      - name: Run tests
+        run: make test
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploying application
+        run: echo "Deploying application..."
+
+      - name: Run deploy
+        run: make deploy
