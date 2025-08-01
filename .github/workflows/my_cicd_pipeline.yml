@@ -1,0 +1,96 @@
+name: NexOps CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  APP_ENV: development
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variable
+        run: echo "APP_ENV=development" >> $GITHUB_ENV
+
+      - name: Building application
+        run: |
+          echo "Building application..."
+          make build
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variable
+        run: echo "APP_ENV=development" >> $GITHUB_ENV
+
+      - name: Running unit tests
+        run: |
+          echo "Running unit tests..."
+          make test
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set environment variable
+        run: echo "APP_ENV=development" >> $GITHUB_ENV
+
+      - name: Deploying application
+        run: |
+          echo "Deploying application to $APP_ENV environment..."
+          ./deploy.sh $APP_ENV
+
+  notify:
+    name: Notify on build status
+    needs: [build, test, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send email on failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          # You must set these secrets for secure auth:
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "❌ NexOps CI/CD Pipeline failed"
+          body: "A workflow run for NexOps pipeline failed. Please check the workflow logs for more details."
+          to: devops@nexops.com
+          from: ${{ secrets.SMTP_FROM }}
+          secure: true
+
+      - name: Send email on success (on change)
+        if: success() && github.event.before != '0000000000000000000000000000000000000000'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "✅ NexOps CI/CD Pipeline succeeded"
+          body: "NexOps pipeline has successfully passed all stages."
+          to: devops@nexops.com
+          from: ${{ secrets.SMTP_FROM }}
+          secure: true
