@@ -1,0 +1,69 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Starting build process
+        run: |
+          echo "Starting build process..."
+          npm install
+          npm run build
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Starting test suite
+        run: |
+          echo "Starting test suite..."
+          npm run test
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploying application
+        run: |
+          echo "Deploying application..."
+          npm run deploy
+
+  notify:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [build, test, deploy]
+    steps:
+      - name: Notify pipeline completion
+        run: |
+          echo "Pipeline completed for branch: ${{ github.ref_name }}"
