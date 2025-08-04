@@ -1,0 +1,263 @@
+name: NexOps Development Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-west-2
+  AWS_ACCOUNT_ID: 012345678901
+  BACKEND_ECR_REPO: 012345678901.dkr.ecr.us-west-2.amazonaws.com/nexops-backend
+  FRONTEND_ECR_REPO: 012345678901.dkr.ecr.us-west-2.amazonaws.com/nexops-frontend
+  SLACK_CHANNEL: '#devops'
+
+jobs:
+  source:
+    name: Source Checkout
+    runs-on: ubuntu-latest
+    outputs:
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get short SHA
+        id: vars
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build Containers
+    needs: source
+    runs-on: ubuntu-latest
+    outputs:
+      backend_image: ${{ steps.backend-build.outputs.image }}
+      frontend_image: ${{ steps.frontend-build.outputs.image }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build backend Docker image
+        id: backend-build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: |
+            ${{ env.BACKEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }}
+            ${{ env.BACKEND_ECR_REPO }}:latest
+
+      - name: Build frontend Docker image
+        id: frontend-build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          tags: |
+            ${{ env.FRONTEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }}
+            ${{ env.FRONTEND_ECR_REPO }}:latest
+
+  test:
+    name: Containerized Tests
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log into Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Load backend image
+        run: |
+          docker load -i <(docker image save ${{ env.BACKEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }})
+      - name: Run backend tests (pytest)
+        run: |
+          docker run --rm ${{ env.BACKEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }} pytest
+
+      - name: Load frontend image
+        run: |
+          docker load -i <(docker image save ${{ env.FRONTEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }})
+      - name: Run frontend tests (npm test)
+        run: |
+          docker run --rm ${{ env.FRONTEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }} npm test
+
+    # On test failure, notify via Slack (will not reach ECR steps)
+    # On success, proceed to artifact upload
+
+  notify-on-failure:
+    if: failure()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Failure on Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          channel-id: ${{ env.SLACK_CHANNEL }}
+          slack-message: ":x: NexOps pipeline failed on 'test' stage for commit ${{ github.sha }}"
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+  artifact-store:
+    name: Push images to ECR
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log into Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push backend Docker image to ECR
+        run: |
+          docker tag ${{ env.BACKEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }} ${{ env.BACKEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }}
+          docker push ${{ env.BACKEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }}
+          docker push ${{ env.BACKEND_ECR_REPO }}:latest
+
+      - name: Push frontend Docker image to ECR
+        run: |
+          docker tag ${{ env.FRONTEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }} ${{ env.FRONTEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }}
+          docker push ${{ env.FRONTEND_ECR_REPO }}:${{ needs.source.outputs.short_sha }}
+          docker push ${{ env.FRONTEND_ECR_REPO }}:latest
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: artifact-store
+    environment:
+      name: staging
+      url: https://staging.nexops.example.com
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy backend to ECS Fargate (staging)
+        run: |
+          aws ecs update-service \
+            --cluster nexops-staging \
+            --service backend \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+      - name: Deploy frontend to ECS Fargate (staging)
+        run: |
+          aws ecs update-service \
+            --cluster nexops-staging \
+            --service frontend \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+      - name: Wait for backend deployment to be stable
+        run: |
+          aws ecs wait services-stable --cluster nexops-staging --services backend
+
+      - name: Wait for frontend deployment to be stable
+        run: |
+          aws ecs wait services-stable --cluster nexops-staging --services frontend
+
+  deploy-production:
+    name: Deploy to Production
+    needs: artifact-store
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://nexops.example.com
+      # Requires manual approval in GitHub Environments settings
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy backend to ECS Fargate (production)
+        run: |
+          aws ecs update-service \
+            --cluster nexops-prod \
+            --service backend \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+      - name: Deploy frontend to ECS Fargate (production)
+        run: |
+          aws ecs update-service \
+            --cluster nexops-prod \
+            --service frontend \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+      - name: Wait for backend deployment to be stable
+        run: |
+          aws ecs wait services-stable --cluster nexops-prod --services backend
+
+      - name: Wait for frontend deployment to be stable
+        run: |
+          aws ecs wait services-stable --cluster nexops-prod --services frontend
+
+  cleanup:
+    name: Cleanup Docker & Prune Old Images
+    needs: [deploy-staging, deploy-production]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove dangling Docker images
+        run: |
+          docker image prune -af
+
+      - name: Prune ECR images older than 30 days (backend)
+        uses: jwalton/gh-ecr-cleanup@v2
+        with:
+          repository: nexops-backend
+          region: ${{ env.AWS_REGION }}
+          filter: 'tagged=true,untagged=true,keep-last=20,older-than=30d'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Prune ECR images older than 30 days (frontend)
+        uses: jwalton/gh-ecr-cleanup@v2
+        with:
+          repository: nexops-frontend
+          region: ${{ env.AWS_REGION }}
+          filter: 'tagged=true,untagged=true,keep-last=20,older-than=30d'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  notify-final:
+    name: Notify Pipeline Result
+    needs: [cleanup, notify-on-failure]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Generate pipeline result message
+        id: summary
+        run: |
+          if [ "${{ needs.cleanup.result }}" = "success" ]; then
+            echo "msg=:white_check_mark: NexOps pipeline succeeded for commit ${{ github.sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "msg=:x: NexOps pipeline failed for commit ${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Send summary to Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          channel-id: ${{ env.SLACK_CHANNEL }}
+          slack-message: ${{ steps.summary.outputs.msg }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
