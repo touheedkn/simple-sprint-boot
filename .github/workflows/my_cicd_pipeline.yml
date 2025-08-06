@@ -1,0 +1,107 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/*'
+  pull_request:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code from repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies from requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit
+
+      - name: Lint codebase with flake8
+        run: |
+          pip install flake8
+          flake8 .
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
+
+      - name: Push Docker image to container registry
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  deploy-staging:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code from repository
+        uses: actions/checkout@v4
+
+      - name: Deploy application to staging environment
+        env:
+          DOCKER_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+        run: |
+          echo "${STAGING_SSH_KEY}" > staging_key.pem
+          chmod 600 staging_key.pem
+          ssh -o StrictHostKeyChecking=no -i staging_key.pem ${STAGING_USER}@${STAGING_HOST} "
+            docker pull $DOCKER_IMAGE &&
+            docker stop app || true &&
+            docker rm app || true &&
+            docker run -d --name app -p 80:80 $DOCKER_IMAGE
+          "
+
+      - name: Run integration tests in staging
+        env:
+          STAGING_URL: ${{ secrets.STAGING_URL }}
+        run: |
+          python -m pip install requests pytest
+          pytest tests/integration --base-url=$STAGING_URL
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code from repository
+        uses: actions/checkout@v4
+
+      - name: Deploy application to production environment
+        env:
+          DOCKER_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+        run: |
+          echo "${PROD_SSH_KEY}" > prod_key.pem
+          chmod 600 prod_key.pem
+          ssh -o StrictHostKeyChecking=no -i prod_key.pem ${PROD_USER}@${PROD_HOST} "
+            docker pull $DOCKER_IMAGE &&
+            docker stop app || true &&
+            docker rm app || true &&
+            docker run -d --name app -p 80:80 $DOCKER_IMAGE
+          "
