@@ -1,0 +1,139 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  EMAIL_TO: team@example.com  # Update with actual team email
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Change version if not nodejs project
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Compile source code
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            dist/
+            build/
+            out/
+        if: always()
+
+  package:
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      docker_image_tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: build_output
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract version from package.json
+        id: version
+        run: |
+          VERSION=$(jq -r .version package.json)
+          echo "tag=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }} .
+
+      - name: Tag Docker image with 'latest'
+        run: |
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }} ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  deploy:
+    needs: package
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.package.outputs.docker_image_tag }}
+
+      - name: Push Docker image to registry (latest tag)
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.package.outputs.docker_image_tag }}
+
+      - name: Deploy to production
+        id: deploy
+        run: |
+          echo "Deploying image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.package.outputs.docker_image_tag }} to production..."
+          # Insert deployment script or action here (e.g., kubectl apply, helm, etc.)
+          # Simulate deployment URL for status reporting:
+          echo "url=https://your-production-service.example.com" >> $GITHUB_OUTPUT
+
+      - name: Notify team via email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.example.com      # Update to your SMTP server
+          server_port: 587
+          username: ${{ secrets.SMTP_USERNAME }}  # Store in repo secrets
+          password: ${{ secrets.SMTP_PASSWORD }}  # Store in repo secrets
+          subject: "Deployment Status: Production"
+          body: |
+            The application has been deployed to production.
+
+            Docker image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.package.outputs.docker_image_tag }}
+            Deployment URL: ${{ steps.deploy.outputs.url }}
+
+            Commit: ${{ github.sha }}
+            Actor: ${{ github.actor }}
+          to: ${{ env.EMAIL_TO }}
+          from: ${{ env.EMAIL_TO }}
+          secure: true
