@@ -1,0 +1,59 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up dependencies
+        run: |
+          # Adjust as required, placeholder for any dependency installation
+          echo "No additional dependencies specified."
+
+      - name: Build the project
+        run: |
+          echo "Building the project..."
+          make build
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up dependencies
+        run: |
+          # Adjust as required, placeholder for any dependency installation
+          echo "No additional dependencies specified."
+
+      - name: Run tests
+        run: |
+          echo "Running tests..."
+          make test
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up dependencies
+        run: |
+          # Adjust as required, placeholder for any dependency installation
+          echo "No additional dependencies specified."
+
+      - name: Deploy the application
+        run: |
+          echo "Deploying the application..."
+          make deploy
