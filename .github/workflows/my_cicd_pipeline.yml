@@ -1,0 +1,87 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build application artifacts
+        run: npm run build
+
+      - name: Perform static code analysis
+        run: npm run lint
+
+      - name: Package artifacts
+        run: tar -czf app-artifacts.tar.gz ./dist
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-artifacts
+          path: app-artifacts.tar.gz
+
+  deploy-staging:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: app-artifacts
+
+      - name: Extract artifacts
+        run: tar -xzf app-artifacts.tar.gz
+
+      - name: Deploy to staging environment
+        env:
+          STAGING_API_KEY: ${{ secrets.STAGING_API_KEY }}
+        run: |
+          # Example deployment command for staging
+          echo "Deploying to staging..."
+          # ./deploy-to-staging.sh ./dist $STAGING_API_KEY
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: app-artifacts
+
+      - name: Extract artifacts
+        run: tar -xzf app-artifacts.tar.gz
+
+      - name: Deploy to production environment
+        env:
+          PRODUCTION_API_KEY: ${{ secrets.PRODUCTION_API_KEY }}
+        run: |
+          # Example deployment command for production
+          echo "Deploying to production..."
+          # ./deploy-to-production.sh ./dist $PRODUCTION_API_KEY
