@@ -1,0 +1,74 @@
+name: Data Pipeline CI/CD
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Every day at midnight
+  workflow_dispatch:
+
+jobs:
+  data_pipeline:
+    name: Run Data Pipeline
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      EMAIL_TO: ${{ secrets.STAKEHOLDERS_EMAILS }}
+      EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+      SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Data Collection
+        run: |
+          python scripts/data_collection.py --source api,files,manual
+
+      - name: Data Validation
+        run: |
+          python scripts/data_validation.py --input data/raw
+
+      - name: Data Cleansing
+        run: |
+          python scripts/data_cleansing.py --input data/validated
+
+      - name: Data Transformation
+        run: |
+          python scripts/data_transformation.py --input data/cleansed
+
+      - name: Data Loading
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          python scripts/data_loading.py --input data/transformed --db-url "$DATABASE_URL"
+
+    # Monitor & notify on failure
+    # The always() condition ensures this runs for failure or cancellation
+      - name: Notify stakeholders on failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ env.SMTP_SERVER }}
+          server_port: 465
+          username: ${{ env.SMTP_USERNAME }}
+          password: ${{ env.SMTP_PASSWORD }}
+          subject: Data Pipeline Failure Notification
+          to: ${{ env.EMAIL_TO }}
+          from: ${{ env.EMAIL_FROM }}
+          content_type: text/html
+          body: |
+            <h2>Data Pipeline Failed</h2>
+            <p>The scheduled data pipeline workflow has failed.</p>
+            <p><b>Workflow:</b> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Run</a></p>
