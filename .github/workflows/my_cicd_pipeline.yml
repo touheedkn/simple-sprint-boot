@@ -1,0 +1,131 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run static code analysis (flake8)
+        run: |
+          pip install flake8
+          flake8 .
+
+      - name: Execute unit tests (pytest)
+        run: |
+          pip install pytest
+          pytest
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  push-image:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy-staging:
+    needs: push-image
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      # Example deployment step (replace with your actual deployment logic)
+      - name: Deploy to Staging
+        run: echo "Deploying to staging environment..."
+        # Add real deployment action here, e.g., using Kubernetes, SSH, etc.
+
+  integration-tests:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run integration tests on staging
+        run: echo "Running integration tests on staging..."
+        # Replace this with actual integration test commands
+
+  deploy-production:
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy-production.outputs.prod-url }}
+    steps:
+      - name: Wait for approval before deploying to production
+        uses: reviewdog/action-wait-for-check@v1
+        with:
+          check_name: 'Manual Approval'
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      # Example production deployment step (replace with your actual deployment logic)
+      - name: Deploy to Production
+        id: deploy-production
+        run: |
+          echo "Deploying to production environment..."
+          # Add real deployment action here, e.g., using Kubernetes, SSH, etc.
