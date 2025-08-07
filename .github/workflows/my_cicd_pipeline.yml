@@ -1,0 +1,66 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Make
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make
+
+      - name: Build the project
+        run: |
+          echo "Building the project..."
+          make build
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Make
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make
+
+      - name: Run tests
+        run: |
+          echo "Running tests..."
+          make test
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Make
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make
+
+      - name: Deploy the application
+        run: |
+          echo "Deploying the application..."
+          make deploy
+
+# Manual Deploy Trigger
+on:
+  workflow_dispatch:
