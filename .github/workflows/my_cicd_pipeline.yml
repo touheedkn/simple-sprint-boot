@@ -1,0 +1,107 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install GCC
+        run: sudo apt-get update && sudo apt-get install -y gcc
+
+      - name: Compile source code
+        run: |
+          mkdir -p build
+          find . -name '*.c' -exec gcc -o build/{} {} \;
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Run unit tests
+        run: pytest
+
+  package:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create artifact directory
+        run: mkdir -p deploy_artifact
+
+      - name: Copy files to artifact directory
+        run: cp -r * deploy_artifact/
+
+      - name: Create tarball of artifact
+        run: tar -czf deploy_artifact.tar.gz deploy_artifact
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy_artifact
+          path: deploy_artifact.tar.gz
+
+  deploy:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy_artifact
+          path: .
+
+      - name: Extract artifact
+        run: tar -xzf deploy_artifact.tar.gz
+
+      - name: Upload artifact to production server
+        env:
+          PROD_SERVER: ${{ secrets.PROD_SERVER }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          PROD_PATH: ${{ secrets.PROD_PATH }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$PROD_SERVER" >> ~/.ssh/known_hosts
+          scp -r deploy_artifact/* $PROD_USER@$PROD_SERVER:$PROD_PATH
+
+  notify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send deployment notification email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: 'Deployment Successful'
+          to: ${{ secrets.NOTIFY_EMAILS }}
+          from: ${{ secrets.SMTP_FROM }}
+          body: |
+            The deployment has been completed successfully to the production server.
