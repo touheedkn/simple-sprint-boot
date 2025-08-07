@@ -1,0 +1,29 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docker-image-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize environment
+        run: |
+          echo "Initializing environment: test"
+          # Set environment variable for later steps
+          echo "TEST_ENV=test" >> $GITHUB_ENV
+
+      - name: Validate Docker image
+        run: |
+          echo "Running docker tests..."
+          # Example: build Docker image (update as needed)
+          docker build -t my-app:test .
+          # Example: run container in 'test' environment
+          docker run --rm -e ENV=$TEST_ENV my-app:test
