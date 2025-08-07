@@ -1,0 +1,122 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Run Flake8 (Lint)
+        run: pip install flake8 && flake8 .
+
+      - name: Run Black (Formatting check)
+        run: pip install black && black --check .
+
+      - name: Run Pytest & Collect Coverage
+        run: |
+          pip install pytest pytest-cov
+          pytest --cov=.
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: .coverage
+
+      - name: Build Application Package
+        run: |
+          pip install build
+          python -m build
+
+      - name: Upload Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-package
+          path: dist/*
+
+  deploy-staging:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-package
+          path: ./dist
+
+      - name: Deploy to Staging Environment
+        env:
+          STAGING_API_KEY: ${{ secrets.STAGING_API_KEY }}
+        run: |
+          echo "Deploying to staging..."
+          # Replace this echo command with the actual deployment commands
+          # For example: ./deploy --env=staging --package=dist/* --api-key=$STAGING_API_KEY
+
+  integration-tests:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Run Integration Tests
+        env:
+          STAGING_API_URL: ${{ secrets.STAGING_API_URL }}
+        run: |
+          echo "Running integration tests against staging environment..."
+          # Replace the following with your integration test command, e.g.:
+          # pytest tests/integration --url=$STAGING_API_URL
+
+  deploy-production:
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ secrets.PRODUCTION_URL }}
+    steps:
+      - name: Download Package Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-package
+          path: ./dist
+
+      - name: Deploy to Production Environment
+        env:
+          PRODUCTION_API_KEY: ${{ secrets.PRODUCTION_API_KEY }}
+        run: |
+          echo "Deploying to production..."
+          # Replace this echo command with the actual deployment commands
+          # For example: ./deploy --env=production --package=dist/* --api-key=$PRODUCTION_API_KEY
+
+    # Require manual approval before deploying to production
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+
+    # Approval via environment rules (GitHub branch protection)
