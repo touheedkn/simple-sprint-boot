@@ -1,0 +1,133 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/*'
+  pull_request:
+    branches:
+      - main
+
+env:
+  IMAGE_NAME: my-app
+  REGISTRY: ghcr.io/${{ github.repository }}
+  HELM_RELEASE_NAME: my-app-release
+  HELM_CHART_PATH: ./helm/my-app
+  KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+
+jobs:
+  build-test-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: |
+          mkdir -p test-results
+          pytest --junitxml=test-results/results.xml
+        continue-on-error: false
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: test-results/results.xml
+
+      - name: Lint code with flake8
+        run: flake8 .
+
+  docker-build-push:
+    needs: build-test-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract commit SHA
+        id: vars
+        run: echo "sha_short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }} .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
+
+  deploy:
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.helm_deploy.outputs.site_url }}
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure kubeconfig
+        run: |
+          echo "${KUBE_CONFIG_DATA}" | base64 --decode > $HOME/.kube/config
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'latest'
+
+      - name: Deploy with Helm
+        id: helm_deploy
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE_NAME }} ${{ env.HELM_CHART_PATH }} \
+            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --set image.tag=${{ github.sha::7 }}
+          # Optionally, get the public site URL (if available)
+          echo "site_url=https://my-app.example.com" >> $GITHUB_OUTPUT
+
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run smoke tests
+        run: |
+          # Replace with actual smoke test commands
+          curl -f https://my-app.example.com/healthz
+
+  notify:
+    needs: [build-test-lint, docker-build-push, deploy, smoke-test]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Notify team via Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "*CI/CD Pipeline Status*:\n- Repository: ${{ github.repository }}\n- Branch: ${{ github.ref }}\n- Commit: ${{ github.sha }}\n- Status: ${{ job.status }}"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
