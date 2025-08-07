@@ -1,0 +1,60 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: python
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Fetch data
+        id: fetch_data
+        run: |
+          curl -o data.csv https://example.com/data.csv
+
+      - name: Clean data
+        id: clean_data
+        run: |
+          python clean_data.py data.csv cleaned_data.csv
+
+      - name: Feature engineering
+        id: feature_engineering
+        run: |
+          python feature_engineering.py cleaned_data.csv features.csv
+
+      - name: Train model
+        id: train_model
+        run: |
+          python train_model.py features.csv model.pkl
+
+      - name: Evaluate model
+        id: evaluate_model
+        run: |
+          python evaluate_model.py model.pkl features.csv evaluation_report.txt
+
+      - name: Deploy model
+        id: deploy_model
+        run: |
+          python deploy_model.py model.pkl
