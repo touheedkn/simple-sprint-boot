@@ -1,0 +1,30 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  docker-validation:
+    runs-on: ubuntu-latest
+    name: Docker Image Validation
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize environment (test)
+        run: |
+          echo "Initializing environment: test"
+          # Set environment variable or other setup as needed
+          export ENVIRONMENT=test
+
+      - name: Validate Docker image
+        run: |
+          echo "Running Docker validation tests (type: docker_test)"
+          # Example command: run a docker test or validation script
+          # Replace below with actual docker test as needed
+          docker --version
+          # e.g., docker-compose -f docker-compose.test.yml up --abort-on-container-exit --exit-code-from sut
