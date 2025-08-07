@@ -1,0 +1,146 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run linters
+        run: pip install flake8 && flake8 src/
+
+      - name: Run unit tests
+        run: pip install pytest && pytest tests/
+
+      - name: Package application
+        run: python setup.py sdist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-artifact
+          path: dist/*
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-artifact
+          path: dist
+
+      - name: Set up Docker Compose
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start test environment
+        run: docker-compose --env-file .env.test up -d
+
+      - name: Install test requirements
+        run: pip install pytest pytest-cov
+
+      - name: Run integration tests
+        run: pytest integration_tests/ --cov=src --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+      - name: Tear down test environment
+        if: always()
+        run: docker-compose --env-file .env.test down
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: test
+    environment:
+      name: production
+      url: ${{ steps.set-url.outputs.url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-artifact
+          path: dist
+
+      - name: Set up Docker Compose
+        uses: docker/setup-buildx-action@v3
+
+      - name: Deploy to production
+        id: deploy_prod
+        run: |
+          docker-compose --env-file .env.prod up -d
+
+      - name: Health check
+        id: health_check
+        run: |
+          # Replace with actual health check, example:
+          curl -f http://localhost:80/health || exit 1
+
+      - name: Set Production URL
+        id: set-url
+        run: echo "url=https://your-production-url.com" >> $GITHUB_OUTPUT
+
+      - name: Notify team of successful deployment
+        if: ${{ success() }}
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "*Production Deployment Succeeded* :rocket:\nWorkflow: ${{ github.workflow }}\nBranch: ${{ github.ref_name }}\nCommit: ${{ github.sha }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # Rollback Step - only runs on failure (deploy or health check)
+      - name: Rollback on failure
+        if: ${{ failure() }}
+        run: |
+          echo "Rolling back to previous stable artifact"
+          docker-compose --env-file .env.prod down
+          # Here you would implement artifact retrieval & redeploy
+          # For demonstration, we assume 'previous' image is tagged 'stable'
+          docker-compose --env-file .env.prod pull app:stable
+          docker-compose --env-file .env.prod up -d
+
+      - name: Notify team of rollback
+        if: ${{ failure() }}
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": ":warning: *Production Rollback Executed* :warning:\nWorkflow: ${{ github.workflow }}\nBranch: ${{ github.ref_name }}\nCommit: ${{ github.sha }}\nCheck the deployment for issues."
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
