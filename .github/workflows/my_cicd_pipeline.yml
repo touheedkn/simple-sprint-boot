@@ -1,0 +1,49 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  ml-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Fetch data
+        run: |
+          python fetch_data.py
+
+      - name: Clean data
+        run: |
+          python clean_data.py
+
+      - name: Extract features
+        run: |
+          python extract_features.py
+
+      - name: Train model
+        run: |
+          python train_model.py
+
+      - name: Evaluate model
+        run: |
+          python evaluate_model.py
+
+      - name: Deploy model
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          python deploy_model.py
