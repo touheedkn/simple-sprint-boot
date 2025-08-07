@@ -1,0 +1,74 @@
+name: Data Processing Pipeline
+
+on:
+  push:
+    paths:
+      - '**.py'
+      - 'data/**'
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - '**.py'
+      - 'data/**'
+      - '.github/workflows/**'
+
+jobs:
+  data-pipeline:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Ingest Data
+        run: |
+          python scripts/ingest_data.py
+
+      - name: Validate Data
+        run: |
+          python scripts/validate_data.py
+
+      - name: Preprocess Data
+        run: |
+          python scripts/preprocess.py --clean-missing --standardize-types --remove-duplicates
+
+      - name: Feature Engineering
+        run: |
+          python scripts/feature_engineering.py --extract --encode --derive-metrics
+
+      - name: Train/Test Split
+        run: |
+          python scripts/split.py --train-size 0.8 --test-size 0.2
+
+      - name: Model Training
+        run: |
+          python scripts/train.py --cross-validate
+
+      - name: Model Evaluation
+        run: |
+          python scripts/evaluate.py --metrics accuracy precision recall f1
+
+      - name: Model Selection
+        run: |
+          python scripts/select_model.py
+
+      - name: Deployment
+        run: |
+          python scripts/deploy.py --package-model --monitor
+
+      - name: Documentation
+        run: |
+          python scripts/document.py --log-experiments --log-pipeline
