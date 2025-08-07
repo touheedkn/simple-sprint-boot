@@ -1,0 +1,141 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Compile Sources
+        run: ./gradlew build -x test
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact
+          path: build/libs/
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Run Unit and Integration Tests
+        run: ./gradlew test integrationTest
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build and Package Application
+        run: ./gradlew assemble
+
+      - name: Upload Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-package
+          path: build/libs/
+
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: package
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-package
+
+      - name: Deploy to Staging Server
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          STAGING_KEY: ${{ secrets.STAGING_KEY }}
+        run: |
+          echo "${STAGING_KEY}" > staging_key.pem
+          chmod 600 staging_key.pem
+          scp -i staging_key.pem -o StrictHostKeyChecking=no build/libs/*.jar $STAGING_USER@$STAGING_HOST:/tmp/app.jar
+          ssh -i staging_key.pem -o StrictHostKeyChecking=no $STAGING_USER@$STAGING_HOST 'sudo systemctl restart app'
+
+  verify:
+    name: Smoke Tests on Staging
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Run Smoke Tests
+        env:
+          STAGING_URL: ${{ secrets.STAGING_URL }}
+        run: |
+          curl -f $STAGING_URL/health || (echo "Smoke tests failed" && exit 1)
+
+  release:
+    name: Release to Production
+    runs-on: ubuntu-latest
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-package
+
+      - name: Deploy to Production Server
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          PROD_KEY: ${{ secrets.PROD_KEY }}
+        run: |
+          echo "${PROD_KEY}" > prod_key.pem
+          chmod 600 prod_key.pem
+          scp -i prod_key.pem -o StrictHostKeyChecking=no build/libs/*.jar $PROD_USER@$PROD_HOST:/tmp/app.jar
+          ssh -i prod_key.pem -o StrictHostKeyChecking=no $PROD_USER@$PROD_HOST 'sudo systemctl restart app'
+
+  monitor:
+    name: Production Monitoring
+    runs-on: ubuntu-latest
+    needs: release
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Check Production Health
+        env:
+          PROD_URL: ${{ secrets.PROD_URL }}
+        run: |
+          curl -f $PROD_URL/health || (echo "Production health check failed" && exit 1)
