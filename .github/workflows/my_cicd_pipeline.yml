@@ -1,0 +1,42 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Tests
+        run: |
+          pytest tests/
+
+      - name: Static Analysis
+        run: |
+          flake8 src/
+          mypy src/
+
+      - name: Build
+        run: |
+          python setup.py sdist bdist_wheel
+
+      - name: Deploy
+        if: success()
+        run: |
+          ./deploy.sh
