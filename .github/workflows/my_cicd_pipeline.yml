@@ -1,0 +1,66 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Compile sources
+        run: |
+          echo "Compiling sources..."
+          gcc -o app main.c
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: app
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app
+
+      - name: Make test script executable
+        run: chmod +x ./run_tests.sh
+
+      - name: Run tests
+        run: |
+          echo "Running tests..."
+          ./run_tests.sh
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app
+
+      - name: Make deploy script executable
+        run: chmod +x ./deploy.sh
+
+      - name: Deploy application
+        run: |
+          echo "Deploying application..."
+          ./deploy.sh
