@@ -1,0 +1,172 @@
+name: Data Processing Pipeline
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2:00am UTC
+  workflow_dispatch:
+
+jobs:
+  collect_data:
+    name: Data Collection
+    runs-on: ubuntu-latest
+    outputs:
+      external_api_data: ${{ steps.external_api.outputs.data_path }}
+      db_dump: ${{ steps.db_dump.outputs.data_path }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Collect data from External API
+        id: external_api
+        run: |
+          python scripts/collect_external_api.py --output data/external_api.json
+        env:
+          API_KEY: ${{ secrets.EXTERNAL_API_KEY }}
+        # outputs: data/external_api.json
+      - name: Collect data from Internal DB
+        id: db_dump
+        run: |
+          python scripts/collect_db.py --output data/db_dump.csv
+        env:
+          DB_CONN: ${{ secrets.INTERNAL_DB_CONN }}
+        # outputs: data/db_dump.csv
+      - name: Upload raw data
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw_data
+          path: |
+            data/external_api.json
+            data/db_dump.csv
+
+  clean_data:
+    name: Data Cleaning
+    needs: collect_data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Download raw data
+        uses: actions/download-artifact@v4
+        with:
+          name: raw_data
+          path: data/
+      - name: Clean and preprocess data
+        run: |
+          python scripts/clean_data.py \
+            --api-data data/external_api.json \
+            --db-data data/db_dump.csv \
+            --output data/cleaned_data.csv
+      - name: Upload cleaned data
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleaned_data
+          path: data/cleaned_data.csv
+
+  transform_data:
+    name: Data Transformation
+    needs: clean_data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Download cleaned data
+        uses: actions/download-artifact@v4
+        with:
+          name: cleaned_data
+          path: data/
+      - name: Transform data (normalize, encode, aggregate)
+        run: |
+          python scripts/transform_data.py \
+            --input data/cleaned_data.csv \
+            --output data/transformed_data.csv
+      - name: Upload transformed data
+        uses: actions/upload-artifact@v4
+        with:
+          name: transformed_data
+          path: data/transformed_data.csv
+
+  validate_data:
+    name: Data Validation
+    needs: transform_data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Download transformed data
+        uses: actions/download-artifact@v4
+        with:
+          name: transformed_data
+          path: data/
+      - name: Validate schema and aggregations
+        run: |
+          python scripts/validate_data.py \
+            --input data/transformed_data.csv \
+            --report data/validation_report.json
+      - name: Upload validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation_report
+          path: data/validation_report.json
+
+  load_to_redshift:
+    name: Load to Data Warehouse (AWS Redshift)
+    needs: validate_data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Download transformed data
+        uses: actions/download-artifact@v4
+        with:
+          name: transformed_data
+          path: data/
+      - name: Load data to Redshift (upsert incremental)
+        run: |
+          python scripts/load_to_redshift.py \
+            --input data/transformed_data.csv \
+            --schema sales_analytics \
+            --mode upsert
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          REDSHIFT_CONN: ${{ secrets.REDSHIFT_CONN }}
+
+  reporting_alerts:
+    name: Reporting and Alerts
+    needs: load_to_redshift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Trigger Tableau dashboards update
+        run: |
+          python scripts/update_tableau.py
+        env:
+          TABLEAU_TOKEN: ${{ secrets.TABLEAU_TOKEN }}
+          TABLEAU_SITE: ${{ secrets.TABLEAU_SITE }}
+      - name: Download validation report
+        uses: actions/download-artifact@v4
+        with:
+          name: validation_report
+          path: data/
+      - name: Send summary email to data team
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "Daily Data Pipeline Summary"
+          to: data-team@example.com
+          from: no-reply@example.com
+          body: |
+            Hi Data Team,
+
+            The daily data pipeline completed successfully.
+
+            Please find the attached validation report.
+
+            Regards,
+            Data Platform
+
+          attachments: data/validation_report.json
