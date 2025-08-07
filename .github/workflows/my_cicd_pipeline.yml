@@ -1,0 +1,77 @@
+name: Data Processing Pipeline
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  data-pipeline:
+    runs-on: ubuntu-latest
+    env:
+      EMAIL_TO: data-team@example.com
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Extract data from source databases
+        run: python scripts/extract_data.py
+
+      - name: Clean and preprocess data
+        run: python scripts/clean_preprocess.py
+
+      - name: Enrich data with external API sources
+        run: python scripts/enrich_data.py
+
+      - name: Transform data into analytics-ready schema
+        run: python scripts/transform_data.py
+
+      - name: Load data into data warehouse
+        run: python scripts/load_data.py
+
+      - name: Run validation and integrity checks
+        run: python scripts/validate_data.py
+
+      - name: Generate daily summary reports
+        run: python scripts/generate_report.py
+
+      - name: Archive raw and intermediate files
+        run: python scripts/archive_files.py
+
+      - name: Notify success via email
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          subject: "✅ Data Pipeline Success"
+          body: "The data processing pipeline succeeded for ${{ github.workflow }} run ${{ github.run_number }}."
+          to: ${{ env.EMAIL_TO }}
+          from: ${{ secrets.SMTP_FROM }}
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          secure: true
+
+      - name: Notify failure via email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          subject: "❌ Data Pipeline Failure"
+          body: "The data processing pipeline FAILED for ${{ github.workflow }} run ${{ github.run_number }}. Please check the logs."
+          to: ${{ env.EMAIL_TO }}
+          from: ${{ secrets.SMTP_FROM }}
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          secure: true
