@@ -1,0 +1,81 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up GCC
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' # Not strictly necessary for gcc, consider removing if not needed
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y gcc
+
+      - name: Build project
+        run: |
+          echo "Building project..."
+          gcc -o myapp main.c
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: myapp
+          path: myapp
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: myapp
+
+      - name: Set execute permissions for myapp
+        run: chmod +x myapp
+
+      - name: Run tests
+        run: |
+          echo "Running tests..."
+          ./run_tests.sh
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: myapp
+
+      - name: Set execute permissions for myapp and deploy script
+        run: |
+          chmod +x myapp
+          chmod +x deploy.sh
+
+      - name: Deploy application
+        run: |
+          echo "Deploying application..."
+          ./deploy.sh
