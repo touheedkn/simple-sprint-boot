@@ -1,0 +1,33 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  docker-image-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize test environment
+        run: echo "Initializing test environment"
+        env:
+          ENVIRONMENT: test
+
+      - name: Validate Docker image
+        run: |
+          if [ "${{ env.TYPE }}" = "docker_test" ]; then
+            echo "Running Docker image validation..."
+            docker --version
+            # Example: build and test a Docker image
+            docker build -t test-image .
+            docker run --rm test-image
+          else
+            echo "No docker_test validation required."
+          fi
+        env:
+          TYPE: docker_test
