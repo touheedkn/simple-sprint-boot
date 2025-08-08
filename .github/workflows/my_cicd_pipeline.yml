@@ -1,0 +1,31 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize environment
+        run: echo "Initializing environment: $ENVIRONMENT"
+
+      - name: Validate Docker image
+        run: |
+          echo "Running Docker test validation..."
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "Testing Docker image build for PR"
+          else
+            echo "Testing Docker image build for push"
+          fi
+          # Example Docker test, replace as necessary
+          docker build -t test-image .
+          docker run --rm test-image echo "Container runs successfully"
