@@ -1,0 +1,29 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Initialize Environment
+        run: echo "Initializing environment: $ENVIRONMENT"
+
+      - name: Docker Image Validation
+        run: |
+          echo "Starting Docker image validation type: docker_test"
+          # Example: Run a test using Docker Compose (replace with actual test commands)
+          if [ -f docker-compose.yml ]; then
+            docker-compose up --abort-on-container-exit --exit-code-from app
+          else
+            echo "No docker-compose.yml found. Implement docker_test steps here."
+          fi
