@@ -1,0 +1,30 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docker-image-test:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+    steps:
+      - name: Initialize
+        run: echo "Initializing pipeline in test environment"
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Docker Image
+        run: |
+          echo "Validating Docker image with docker_test type"
+          # Assuming a Dockerfile exists in the repository root
+          docker build --build-arg ENVIRONMENT=${ENVIRONMENT} -t test-image:latest .
+          # Run docker check/test command (example: running tests in a container)
+          docker run --rm test-image:latest echo "Docker image validation passed"
