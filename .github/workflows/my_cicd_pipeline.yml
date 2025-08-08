@@ -1,0 +1,17 @@
+name: Test Pipeline
+
+on:
+  workflow_dispatch:
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Initialize - Setup environment
+        run: echo "Initializing test environment"
+        env:
+          ENVIRONMENT: test
+
+      - name: Validate - Docker test
+        run: |
+          echo "Running Docker validation tests of type: docker_test"
