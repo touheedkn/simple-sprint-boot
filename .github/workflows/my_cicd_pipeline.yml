@@ -1,0 +1,30 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docker-image-test:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Initialize Test Environment
+        run: echo "Initializing environment: $ENVIRONMENT"
+
+      - name: Validate Docker Image
+        run: |
+          echo "Running docker test..."
+          if docker image ls | grep -q 'test-image'; then
+            echo "Docker image exists. Running tests..."
+            # Replace with actual test command, e.g., docker run, etc.
+            docker run --rm test-image /bin/sh -c "echo 'Docker test succeeded.'"
+          else
+            echo "Docker image 'test-image' not found."
+            exit 1
