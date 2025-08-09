@@ -1,0 +1,35 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  docker-image-test:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize Environment (test)
+        run: |
+          echo "Initializing environment for testing"
+          echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_ENV
+
+      - name: Validate Docker Image
+        run: |
+          echo "Running Docker image validation test"
+          # Insert your docker test command here, e.g.:
+          docker --version
+          # Example test (modify as needed for real validation):
+          if ! docker ps --all > /dev/null 2>&1; then
+            echo "Docker is not running or not installed." >&2
+            exit 1
+          fi
+          echo "Docker test completed successfully"
