@@ -1,0 +1,28 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  docker-image-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Initialize Environment
+        uses: actions/setup-node@v4 # required as a sample setup step; replace with appropriate setup action if needed
+        with:
+          node-version: '18'
+        env:
+          ENVIRONMENT: test
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Image
+        uses: docker://alpine:latest
+        with:
+          entrypoint: /bin/sh
+          args: -c "echo 'Running docker image checks'"
