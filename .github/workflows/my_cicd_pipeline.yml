@@ -1,0 +1,40 @@
+name: Test Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  docker-validation:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize Environment
+        run: |
+          echo "Initializing environment: $ENVIRONMENT"
+          # Add additional initialization here if required
+
+      - name: Validate Docker Image
+        run: |
+          echo "Running Docker image validation"
+          if [ "$ENVIRONMENT" = "test" ]; then
+            if docker images | grep -q 'your-image-name'; then
+              echo "Docker image found."
+            else
+              echo "Docker image not found!"
+              exit 1
+            fi
+            # Sample docker test; replace as needed
+            docker run --rm your-image-name:latest echo "Docker image test successful"
+          else
+            echo "Validation type not supported for environment: $ENVIRONMENT"
+            exit 1
+          fi
