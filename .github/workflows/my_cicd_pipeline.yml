@@ -1,0 +1,31 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docker-image-test:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Initialize environment
+        run: |
+          echo "Initializing environment for $ENVIRONMENT"
+      
+      - name: Validate Docker image
+        run: |
+          echo "Validating Docker image..."
+          if docker image inspect my-image:latest > /dev/null 2>&1; then
+            echo "Docker image exists."
+            docker run --rm my-image:latest echo "Test Passed"
+          else
+            echo "Docker image does not exist."
+            exit 1
+          fi
