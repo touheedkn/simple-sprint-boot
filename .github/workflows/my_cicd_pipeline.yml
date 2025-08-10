@@ -1,0 +1,33 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  docker-validation:
+    runs-on: ubuntu-latest
+    name: Docker Image Validation
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize test environment
+        run: |
+          echo "Setting up environment: test"
+          # Example: Set environment variables or prepare configs as needed for tests
+          export ENVIRONMENT="test"
+
+      - name: Validate Docker Image
+        run: |
+          echo "Validating Docker image"
+          # Example: Build docker image for testing, update with actual image name if needed
+          docker build -t test-image:latest .
+          # Run Hadolint as example validation tool
+          docker run --rm -i hadolint/hadolint < Dockerfile
+          # Additional docker testing logic can be added here
