@@ -1,0 +1,32 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Docker Image Validation
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize environment
+        run: |
+          echo "Setting up environment: test"
+          # Add environment-specific setup here if needed
+
+      - name: Validate Docker image
+        run: |
+          echo "Running Docker test validation"
+          # Example: Validate Dockerfile syntax
+          docker image ls
+          if [ -f Dockerfile ]; then
+            docker run --rm -i hadolint/hadolint < Dockerfile
+          else
+            echo "No Dockerfile found to validate."
+          fi
