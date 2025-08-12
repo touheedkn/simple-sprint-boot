@@ -1,0 +1,29 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+    description: A simple test pipeline for Docker image validation
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize environment
+        run: |
+          echo "Initializing environment: test"
+          # Here you could set environment variables or prepare the test environment if needed
+
+      - name: Validate Docker image
+        run: |
+          echo "Validating Docker image for type: docker_test"
+          # Example: Docker image build and test
+          docker --version
+          docker image build -t my-app-test .
+          docker container run --rm my-app-test echo "Container started successfully"
