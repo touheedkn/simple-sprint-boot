@@ -1,0 +1,21 @@
+name: Test Pipeline
+
+on:
+  workflow_dispatch:
+
+jobs:
+  docker-image-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Initialize
+        run: |
+          echo "Initializing environment: test"
+          # If there are environment variables to set, do so here
+          export ENVIRONMENT=test
+
+      - name: Validate Docker Image
+        run: |
+          echo "Validating Docker image for type: docker_test"
+          # Example command for docker validation (replace with your own as needed)
+          docker --version
+          # Insert actual docker image test commands below
