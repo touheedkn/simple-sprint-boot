@@ -1,0 +1,37 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  docker-validation:
+    runs-on: ubuntu-latest
+    description: A simple test pipeline for Docker image validation
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize environment
+        run: |
+          echo "Setting up environment: test"
+          # Export environment variable for the test environment
+          export ENVIRONMENT=test
+
+      - name: Validate Docker image
+        run: |
+          echo "Running docker test validation..."
+          # Example: pull image, run docker tests, etc.
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "This is a pull request. Running Docker test type: docker_test"
+          else
+            echo "This is a push to main. Running Docker test type: docker_test"
+          fi
+          # (You can insert actual docker validation commands below)
+          # docker build -t test-image .
+          # docker run --rm test-image /bin/sh -c "your-test-command"
