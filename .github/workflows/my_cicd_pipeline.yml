@@ -1,0 +1,21 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+    steps:
+      - name: Initialize - Set up test environment
+        run: echo "Setting up environment: $ENVIRONMENT"
+
+      - name: Validate - Docker image test
+        uses: docker://alpine:latest
+        with:
+          args: echo "Running Docker image validation (type: docker_test)"
