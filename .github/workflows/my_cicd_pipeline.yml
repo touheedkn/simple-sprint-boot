@@ -1,0 +1,31 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  docker-validation:
+    runs-on: ubuntu-latest
+    description: A simple test pipeline for Docker image validation
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize environment
+        run: echo "Setting up environment: test"
+
+      - name: Validate Docker Image
+        run: |
+          echo "Running Docker image test..."
+          if docker info &> /dev/null; then
+            echo "Docker is available."
+          else
+            echo "Docker is NOT available."
+            exit 1
+          fi
+          # Replace the following with your actual docker test if available
+          # For demonstration, list docker images
+          docker images
