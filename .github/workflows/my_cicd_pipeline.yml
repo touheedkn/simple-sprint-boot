@@ -1,0 +1,30 @@
+name: Test Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Initialize - Setup Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+        env:
+          ENVIRONMENT: test
+          
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Image
+        run: |
+          echo "Validating Docker image for test environment..."
+          docker --version
+          # You would insert the actual docker test command here, e.g.:
+          # docker build -t my-image .
+          # docker run --rm my-image /bin/sh -c "your test command"
