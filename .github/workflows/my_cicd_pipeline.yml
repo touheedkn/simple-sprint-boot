@@ -1,0 +1,32 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+      VALIDATION_TYPE: docker_test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize Environment
+        run: echo "Initializing environment: $ENVIRONMENT"
+
+      - name: Validate Docker Image
+        run: |
+          echo "Running docker image validation..."
+          # Example command, replace with your actual validation logic.
+          if [ "$VALIDATION_TYPE" = "docker_test" ]; then
+            docker --version
+            # Add docker image validation steps here
+          else
+            echo "Unknown validation type: $VALIDATION_TYPE"
+            exit 1
+          fi
