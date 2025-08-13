@@ -1,0 +1,32 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  docker-validation:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize environment (test)
+        run: echo "Initializing environment: $ENVIRONMENT"
+
+      - name: Validate Docker image
+        run: |
+          echo "Validating Docker image with type: docker_test"
+          # Example: Run a basic Docker test (edit as needed)
+          if ! command -v docker &> /dev/null; then
+            echo "Docker is not installed."
+            exit 1
+          fi
+          docker info
+
+# Description: A simple test pipeline for Docker image validation
+# Version: 1.0.0
