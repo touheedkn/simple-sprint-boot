@@ -1,0 +1,32 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Initialize Environment (test)
+        run: |
+          echo "Initializing environment: test"
+          # Set up environment variables or perform any initialization if required
+
+      - name: Validate Docker Image
+        run: |
+          echo "Validating Docker image for type: docker_test"
+          # Place Docker image validation logic here, e.g.:
+          if [ -f Dockerfile ]; then
+            docker build -t temp_image:test .
+            echo "Docker build succeeded."
+            docker image rm temp_image:test
+          else
+            echo "Dockerfile not found. Validation failed."
+            exit 1
