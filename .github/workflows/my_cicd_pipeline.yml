@@ -1,0 +1,33 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize test environment
+        run: |
+          echo "Setting up environment: test"
+          # Add any other environment initialization commands here
+
+      - name: Validate Docker image
+        run: |
+          echo "Validating Docker image"
+          # Insert Docker validation commands here, e.g.:
+          docker --version
+          # Example test (adapt to actual Docker test scripts)
+          if docker image ls; then
+            echo "Docker image listing succeeded - test passed"
+          else
+            echo "Docker image listing failed - test failed"
+            exit 1
+          fi
