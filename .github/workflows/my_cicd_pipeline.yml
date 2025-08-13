@@ -1,0 +1,28 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+      CHECK_TYPE: docker_test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize - Set up environment
+        run: echo "Initializing environment: $ENVIRONMENT"
+
+      - name: Validate - Docker image test
+        run: |
+          echo "Validating with type: $CHECK_TYPE"
+          # Example Docker test command goes here
+          # For illustration; replace with real validation as needed
+          docker --version
