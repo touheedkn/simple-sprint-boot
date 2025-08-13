@@ -1,0 +1,25 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize - Setup test environment
+        run: |
+          echo "Initializing environment: test"
+
+      - name: Validate - Docker image test
+        run: |
+          echo "Validating Docker image with type: docker_test"
+          # Replace this with actual docker test commands if needed
