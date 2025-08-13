@@ -1,0 +1,28 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docker-validation:
+    name: Docker Image Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize environment
+        run: |
+          echo "Setting environment to 'test'"
+          export ENVIRONMENT=test
+
+      - name: Validate Docker Image
+        run: |
+          echo "Running Docker image validation"
+          docker --version
+          # Example: Perform Docker test validation, replace below with your actual docker test command
+          # docker run --rm your-image:tag test
