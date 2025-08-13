@@ -1,0 +1,27 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Docker Image Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize - Set Environment Variable
+        run: echo "ENVIRONMENT=test" >> $GITHUB_ENV
+
+      - name: Validate Docker Image
+        run: |
+          echo "Validating Docker image in environment: ${{ env.ENVIRONMENT }}"
+          # Add your Docker image validation logic here
+          # For demonstration, we check if Docker is installed and print a test message
+          docker --version
+          echo "Docker test of type: docker_test"
