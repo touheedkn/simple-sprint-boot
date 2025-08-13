@@ -1,0 +1,29 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  docker-image-validation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize - Set environment variables
+        run: |
+          echo "Setting up environment: test"
+          echo "ENVIRONMENT=test" >> $GITHUB_ENV
+
+      - name: Validate Docker image
+        run: |
+          echo "Validating Docker image..."
+          docker --version
+          # Run a basic Docker test, e.g., list images or run a test container
+          docker image ls
+          # Optionally, insert test logic:
+          # docker run --rm hello-world
