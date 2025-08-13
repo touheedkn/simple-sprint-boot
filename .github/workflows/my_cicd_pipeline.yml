@@ -1,0 +1,28 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  docker-test:
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize
+        run: |
+          echo "Initializing environment for $ENVIRONMENT"
+        env:
+          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+
+      - name: Validate - Docker image test
+        run: |
+          echo "Running Docker image validation checks"
+          # Replace this with actual Docker test commands as needed
+          docker version || { echo "Docker is not installed!"; exit 1; }
