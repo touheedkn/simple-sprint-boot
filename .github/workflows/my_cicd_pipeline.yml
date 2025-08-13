@@ -1,0 +1,35 @@
+name: Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize environment
+        run: |
+          echo "Setting up environment: test"
+          # (Put any further initialization commands here as needed.)
+
+      - name: Validate Docker image
+        run: |
+          echo "Running docker_test validation"
+          if ! command -v docker &> /dev/null; then
+            echo "Docker not installed. Installing Docker..."
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+            sudo systemctl start docker
+            sudo usermod -aG docker $USER
+          fi
+          # Example of testing if Docker can run hello-world image
+          docker run --rm hello-world
